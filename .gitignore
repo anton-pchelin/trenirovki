@@ -1,3 +1,4 @@
 задания/
 node_modules/
 tests/out.xlsx
+.claude/
