@@ -8,7 +8,8 @@ import './screens.js';
 import './item.js';
 import './history.js';
 
-document.addEventListener('pointerdown', unlockAudio);
+// Айфон разрешает звук только из касания; на разных версиях iOS срабатывает разное событие
+for (const ev of ['pointerdown', 'touchend', 'click']) document.addEventListener(ev, unlockAudio);
 
 async function boot() {
   try {
