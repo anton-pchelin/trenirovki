@@ -65,6 +65,11 @@ test('подбор веса под повторы (обратная формул
   assert.equal(c.weightForReps(120, 12), 85);    // 120 / 1.4 ≈ 85.7 → 85
   assert.equal(c.weightForReps(null, 5), null);
   assert.equal(c.weightForReps(120, 0), null);
+  assert.equal(c.repsForWeight(120, 120), 1);
+  assert.equal(c.repsForWeight(120, c.weightForReps(120, 5)), 5);
+  assert.equal(c.repsForWeight(120, c.weightForReps(120, 12)), 12);
+  assert.equal(c.repsForWeight(120, 60), 30);
+  assert.equal(c.repsForWeight(120, 130), null, 'больше 1ПМ — ни одного повтора');
 });
 
 test('комплексы', () => {

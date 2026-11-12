@@ -122,6 +122,13 @@ export function weightForReps(base, reps) {
   return roundTo(base / (1 + reps / 30), 2.5);
 }
 
+// Сколько повторов получится с весом w при данном 1ПМ (та же формула наоборот)
+export function repsForWeight(base, w) {
+  if (!base || !w || w <= 0 || w > base) return null;
+  if (w === base) return 1;
+  return Math.max(1, Math.round(30 * (base / w - 1)));
+}
+
 export function percentTable(base, list = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95]) {
   return list.map(p => ({ p, w: roundTo(base * p / 100, 2.5) }));
 }

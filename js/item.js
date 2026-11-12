@@ -2,7 +2,7 @@
 import { h, sheet } from './dom.js';
 import { register, go, back, render } from './router.js';
 import { state, save, exById, workoutById } from './store.js';
-import { FIELDS, parseNum, parseTime, fmtNum, fmtTime, fmtSet, oneRM, percentTable, plates, wodHasResult, fmtWodResult, weightForReps } from './calc.js';
+import { FIELDS, parseNum, parseTime, fmtNum, fmtTime, fmtSet, oneRM, percentTable, plates, wodHasResult, fmtWodResult, weightForReps, repsForWeight } from './calc.js';
 import { lastTime, prFlags, allDoneSets, wodIsPR, lastWod } from './queries.js';
 import { startRest, restBar } from './rest.js';
 import { beep, unlockAudio, keepAwake } from './signals.js';
@@ -83,7 +83,7 @@ function exerciseScreen(w, it) {
       hasW ? h('div', { class: 'row2', style: 'margin-top:8px' },
         h('button', { class: 'btn sec', onclick: () => percentSheet(it.exId) }, '% от 1ПМ'),
         h('button', { class: 'btn sec', onclick: () => platesSheet(it) }, 'Блины')) : null,
-      hasW ? h('button', { class: 'btn sec', style: 'margin-top:8px', onclick: () => suggestSheet(it.exId, it) }, '🎯 Подобрать вес под повторы') : null,
+      hasW ? h('button', { class: 'btn sec', style: 'margin-top:8px', onclick: () => suggestSheet(it.exId, it) }, '🎯 Подбор веса и повторов') : null,
       h('label', { class: 'f' }, 'Заметка'),
       h('textarea', { value: it.note ?? '', oninput: e => { it.note = e.target.value; save(); } }),
       h('div', { class: 'muted small', style: 'margin-top:8px' }, 'Пустой подход с серыми цифрами: ✓ возьмёт прошлые значения. Нажмите на номер подхода, чтобы удалить его.'),
@@ -109,27 +109,58 @@ function fieldsSheet(it) {
   ]);
 }
 
-// Подбор веса под целевое число повторов: обратная формула от 1ПМ (ручного или посчитанного)
+// Живой подбор: вводите повторы — считается вес; вводите вес — считаются повторы (от 1ПМ)
 function suggestSheet(exId, it) {
-  let reps = 5;
-  sheet('Подобрать вес', (close, redraw) => {
-    const auto = oneRM(allDoneSets(exId));
-    const manual = state.oneRM[exId];
-    const base = manual ?? auto?.value ?? null;
-    const sug = base ? weightForReps(base, reps) : null;
+  const auto = oneRM(allDoneSets(exId));
+  let base = state.oneRM[exId] ?? auto?.value ?? null;
+  let reps = 5, wg = base ? weightForReps(base, reps) : null;
+  sheet('Подбор веса и повторов', (close) => {
+    const result = h('div', { class: 'clock', style: 'font-size:44px;margin:8px 0' });
+    const apply = h('button', { class: 'btn' });
+    const wIn = h('input', { class: 'field', inputMode: 'decimal', style: 'width:120px;text-align:center;font-size:20px', value: wg ? fmtNum(wg) : '', placeholder: 'кг' });
+    const rIn = h('input', { class: 'field', inputMode: 'numeric', style: 'width:120px;text-align:center;font-size:20px', value: reps });
+    const update = () => {
+      const ok = base && wg && reps;
+      result.textContent = ok ? `${fmtNum(wg)} кг × ${reps}` : '—';
+      apply.textContent = ok ? `Вписать подход ${fmtNum(wg)}×${reps}` : 'Вписать подход';
+      apply.style.opacity = ok ? 1 : 0.4;
+    };
+    rIn.oninput = e => {
+      const v = parseNum(e.target.value);
+      if (v && v >= 1 && v <= 30) {
+        reps = Math.round(v);
+        if (base) { wg = weightForReps(base, reps); wIn.value = fmtNum(wg); }
+      }
+      update();
+    };
+    wIn.oninput = e => {
+      const v = parseNum(e.target.value);
+      wg = v;
+      if (base && v) { const r = repsForWeight(base, v); if (r) { reps = r; rIn.value = r; } }
+      update();
+    };
+    apply.onclick = () => { if (base && wg && reps) { it.sets.push({ w: wg, r: reps, done: false }); save(); close(); render(true); } };
+    update();
+    const rmIn = h('input', {
+      class: 'field', inputMode: 'decimal', style: 'width:120px;text-align:center', placeholder: 'кг',
+      oninput: e => {
+        const v = parseNum(e.target.value);
+        if (v) { state.oneRM[exId] = v; base = v; save(); wg = weightForReps(base, reps); wIn.value = fmtNum(wg); update(); }
+      },
+    });
     return [
-      h('div', { class: 'toggle' }, h('span', { style: 'font-size:18px' }, 'Повторы в подходе'),
-        h('input', {
-          class: 'field', inputMode: 'numeric', style: 'width:110px;text-align:center;font-size:20px', value: reps,
-          onchange: e => { const v = parseNum(e.target.value); if (v && v >= 1 && v <= 30) reps = Math.round(v); redraw(); },
-        })),
-      base ? h('div', { class: 'muted small', style: 'margin:6px 0 12px' },
-        `От 1ПМ ${fmtNum(base)} кг (${manual != null ? 'задан вручную' : 'по формуле из ' + fmtSet(auto.from)})`)
-        : h('div', { class: 'muted', style: 'margin:6px 0 12px' }, 'Пока не от чего считать: отметьте подход с весом или задайте 1ПМ в «% от 1ПМ».'),
-      sug ? h('div', { class: 'clock', style: 'font-size:56px;margin:4px 0 10px' }, fmtNum(sug), h('span', { style: 'font-size:20px;color:var(--muted)' }, ' кг')) : null,
-      sug ? h('button', { class: 'btn', onclick: () => { it.sets.push({ w: sug, r: reps, done: false }); save(); close(); render(true); } },
-        `Вписать подход ${fmtNum(sug)}×${reps}`) : null,
-      sug ? h('div', { class: 'muted small center', style: 'margin-top:8px' }, 'Округлено до 2,5 кг') : null,
+      h('div', { class: 'toggle' },
+        h('div', null, h('label', { class: 'f', style: 'margin-top:0' }, 'Повторы'), rIn),
+        h('div', { style: 'font-size:24px;color:var(--muted);padding-top:22px' }, '×'),
+        h('div', null, h('label', { class: 'f', style: 'margin-top:0' }, 'Вес, кг'), wIn)),
+      base ? h('div', { class: 'muted small', style: 'margin:8px 0' },
+        `От 1ПМ ${fmtNum(base)} кг (${state.oneRM[exId] != null ? 'задан вручную' : 'по формуле из ' + fmtSet(auto.from)})`)
+        : h('div', null,
+          h('div', { class: 'muted', style: 'margin:8px 0 4px' }, 'Пока не от чего считать. Впишите свой 1ПМ (максимум на 1 повтор) — дальше всё посчитается само:'),
+          h('div', { class: 'toggle' }, h('span', null, 'Ваш 1ПМ'), rmIn)),
+      result,
+      apply,
+      h('div', { class: 'muted small center', style: 'margin-top:8px' }, 'Подход вписывается как черновик — поправьте цифры на фактические и отметьте ✓'),
     ];
   });
 }
