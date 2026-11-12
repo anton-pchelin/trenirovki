@@ -72,6 +72,8 @@ function exerciseScreen(w, it) {
     right: h('button', { class: 'link', onclick: () => go('history', { kind: 'ex', id: it.exId }) }, 'История'),
     body: [
       w.id === state.activeId ? rb.el : null,
+      h('label', { class: 'toggle', style: 'margin-bottom:10px' }, h('span', null, 'Выполнено'),
+        h('input', { type: 'checkbox', checked: !!it.done, style: 'width:24px;height:24px', onchange: e => { it.done = e.target.checked; save(); } })),
       h('div', { class: 'prev' }, prev.length ? 'Прошлый раз: ' + prev.map(fmtSet).join(', ') : 'Первый раз — удачи!'),
       h('table', { class: 'sets' },
         h('thead', null, h('tr', null, h('th', { class: 'n' }, '№'), it.fields.map(f => h('th', null, FIELDS[f].label)), h('th'))),
@@ -230,6 +232,8 @@ function wodScreen(w, it) {
   };
 
   const body = [
+    h('label', { class: 'toggle', style: 'margin-bottom:10px' }, h('span', null, 'Выполнено'),
+      h('input', { type: 'checkbox', checked: !!it.done, style: 'width:24px;height:24px', onchange: e => { it.done = e.target.checked; save(); } })),
     h('div', { class: 'muted' }, formatLine(d)),
     h('div', { class: 'wodlines' }, d.lines.map(l => h('div', null, l))),
     prev ? h('div', { class: 'prev' }, `Прошлый раз (${prev.workout.date.split('-').reverse().join('.')}): ${fmtWodResult(d.format, prev.item.res, prev.item.rx)}`) : null,
@@ -373,6 +377,8 @@ function taskScreen(w, it) {
     title: 'Задание',
     body: [
       w.id === state.activeId ? rb.el : null,
+      h('label', { class: 'toggle', style: 'margin-bottom:10px' }, h('span', null, 'Выполнено'),
+        h('input', { type: 'checkbox', checked: !!it.done, style: 'width:24px;height:24px', onchange: e => { it.done = e.target.checked; save(); } })),
       h('label', { class: 'f' }, 'Текст задания'),
       h('textarea', {
         value: it.text ?? '', style: 'min-height:110px', placeholder: 'Например: 3 раунда — 10 бёрпи, 15 махов гирей…',

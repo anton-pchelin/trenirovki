@@ -123,7 +123,9 @@ register('workout', ({ id }) => {
   const cards = w.items.map(it => {
     const s = itemSummary(w, it);
     return h('button', { class: 'card', onclick: () => go('item', { wid: w.id, iid: it.id }) },
-      h('div', { class: 't' }, s.name, s.pr ? h('span', { class: 'pr' }, ' 🏆') : null), h('div', { class: 's' }, s.sum));
+      h('div', { class: 't' }, s.name,
+        it.done ? h('span', { style: 'color:var(--accent)' }, ' ✓') : null,
+        s.pr ? h('span', { class: 'pr' }, ' 🏆') : null), h('div', { class: 's' }, s.sum));
   });
   const add = () => openPicker(e => { const it = addEntry(w, e); go('item', { wid: w.id, iid: it.id }); });
   const addText = () => { const it = addTask(w); go('item', { wid: w.id, iid: it.id }); };
