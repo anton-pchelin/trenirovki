@@ -5,7 +5,7 @@
   /* Светлая тема */
   --bg: #F5F5F7; --text: #1D1D1F; --cell: #E9E9EB; --card: #FFFFFF;
   --muted: #86868B; --line: rgba(0,0,0,.08); --danger: #D70015; --gold: #B48000;
-  --bar: rgba(245,245,247,.82);
+  --bar: rgba(245,245,247,.82); --bg-outer: #E4E4E8;
   --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 14px rgba(0,0,0,.05);
   --pad: 12px;
   color-scheme: light;
@@ -14,7 +14,7 @@
   :root:not([data-theme="light"]) {
     --bg: #1C1C1E; --text: #F5F5F7; --cell: #3A3A3C; --card: #2C2C2E;
     --muted: #98989D; --line: rgba(255,255,255,.1); --danger: #FF6961; --gold: #FFD60A;
-    --bar: rgba(28,28,30,.82);
+    --bar: rgba(28,28,30,.82); --bg-outer: #101012;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
     color-scheme: dark;
   }
@@ -22,7 +22,7 @@
 :root[data-theme="dark"] {
   --bg: #1C1C1E; --text: #F5F5F7; --cell: #3A3A3C; --card: #2C2C2E;
   --muted: #98989D; --line: rgba(255,255,255,.1); --danger: #FF6961; --gold: #FFD60A;
-  --bar: rgba(28,28,30,.82);
+  --bar: rgba(28,28,30,.82); --bg-outer: #101012;
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
   color-scheme: dark;
 }
@@ -175,3 +175,12 @@ label.f { display: block; margin: 12px 0 6px; font-size: 0.88rem; color: var(--m
 .chart { width: 100%; height: 220px; }
 .chart text { fill: var(--muted); font-size: 11px; }
 .empty { text-align: center; color: var(--muted); padding: 30px 10px; }
+
+/* Компьютер: приложение — окно по центру, как программа на Маке, а не на весь монитор */
+@media (min-width: 700px) {
+  body { display: flex; justify-content: center; align-items: center; padding: 28px; background: var(--bg-outer); }
+  #app { width: 520px; max-width: 100%; height: 100%; max-height: 940px; border-radius: 18px; overflow: hidden;
+    border: 1px solid var(--line); box-shadow: 0 12px 48px rgba(0,0,0,.22); background: var(--bg); }
+  .sheet { max-width: 520px; margin: 0 auto; }
+  .cal .d { aspect-ratio: auto; height: 44px; }
+}
