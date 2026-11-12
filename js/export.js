@@ -1,7 +1,7 @@
 // Строки для Excel: одна строка на подход с ✓, комплекс — одна строка на результат.
 import { sortedWorkouts, exById } from './store.js';
 import { doneSets, prFlags, wodIsPR } from './queries.js';
-import { TYPE_NAMES, wodHasResult } from './calc.js';
+import { TYPE_NAMES, wodHasResult, fmtTime } from './calc.js';
 import { FORMAT_NAMES } from './data-wods.js';
 import { makeXlsx } from './xlsx.js';
 
@@ -21,6 +21,24 @@ export function exportRows() {
             s.t != null ? { time: s.t } : null, null, null, prs[i] ? 'да' : null, n === 1 && it.note ? it.note : null]);
         });
         if (n === 0 && it.note) rows.push([{ date: w.date }, ex?.name ?? '?', TYPE_NAMES[ex?.type] ?? '', null, null, null, null, null, null, null, null, it.note]);
+      } else if (it.kind === 'task') {
+        const name = (it.text ?? '').split('\n')[0].slice(0, 60) || 'Задание';
+        if (it.mode === 'sets') {
+          let n = 0;
+          for (const s of it.sets ?? []) {
+            if (!s.done) continue;
+            rows.push([{ date: w.date }, name, 'задание', ++n, s.w ?? null, s.r ?? null, null, null, null, null, null, n === 1 && it.text ? it.text : null]);
+          }
+          if (n === 0) rows.push([{ date: w.date }, name, 'задание', null, null, null, null, null, null, null, null, it.text || null]);
+        } else if (it.mode === 'time') {
+          rows.push([{ date: w.date }, name, 'задание', null, null, null, null, it.time != null ? { time: it.time } : null, null, null, null, it.text || null]);
+        } else if (it.mode === 'times') {
+          const ts = (it.times ?? []).filter(t => t != null);
+          const note = [it.text, ts.length ? 'интервалы: ' + ts.map(fmtTime).join(', ') : ''].filter(Boolean).join(' — ');
+          rows.push([{ date: w.date }, name, 'задание', null, null, null, null, null, null, null, null, note || null]);
+        } else {
+          rows.push([{ date: w.date }, name, 'задание', null, null, null, null, null, null, null, null, it.text || null]);
+        }
       } else {
         const f = it.def.format, r = it.res || {};
         if (!wodHasResult(f, r)) continue;

@@ -115,6 +115,13 @@ export function roundTo(v, step) {
   return Math.round(v / step) * step;
 }
 
+// Вес на заданное число повторов от 1ПМ (обратная формула Эпли), округление до 2,5 кг
+export function weightForReps(base, reps) {
+  if (!base || !reps || reps < 1) return null;
+  if (reps === 1) return base; // 1 повтор — это и есть 1ПМ
+  return roundTo(base / (1 + reps / 30), 2.5);
+}
+
 export function percentTable(base, list = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95]) {
   return list.map(p => ({ p, w: roundTo(base * p / 100, 2.5) }));
 }

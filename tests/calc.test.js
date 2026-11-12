@@ -59,6 +59,14 @@ test('рекорды на 1/3/5/10', () => {
   assert.deepEqual(r.map(x => x.set?.w ?? null), [105, 105, 100, null]);
 });
 
+test('подбор веса под повторы (обратная формула)', () => {
+  assert.equal(c.weightForReps(120, 1), 120);
+  assert.equal(c.weightForReps(120, 5), 102.5); // 120 / (1 + 5/30) ≈ 102.86 → 102.5
+  assert.equal(c.weightForReps(120, 12), 85);    // 120 / 1.4 ≈ 85.7 → 85
+  assert.equal(c.weightForReps(null, 5), null);
+  assert.equal(c.weightForReps(120, 0), null);
+});
+
 test('комплексы', () => {
   assert.ok(c.compareWod('time', { time: 272 }, { time: 291 }) > 0);
   assert.equal(c.compareWod('time', { time: 272, capped: true }, { time: 291 }), null);

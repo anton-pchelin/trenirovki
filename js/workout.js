@@ -22,6 +22,14 @@ export function addEntry(workout, entry) {
   return item;
 }
 
+// Свободное задание текстом: заметка + по желанию время, подходы (вес×повторы) или интервалы времени
+export function addTask(workout) {
+  const item = { id: uid(), kind: 'task', text: '', mode: 'none', time: null, sets: [], times: [] };
+  workout.items.push(item);
+  save();
+  return item;
+}
+
 export function startWorkout() {
   if (state.activeId && workoutById(state.activeId)) return workoutById(state.activeId);
   const w = newWorkout();
@@ -47,6 +55,8 @@ export function repeatWorkout(src) {
       w.items.push({ id: uid(), kind: 'ex', exId: it.exId, fields: [...it.fields], sets: Array.from({ length: n }, () => ({ done: false })), note: '' });
     } else if (it.kind === 'wod') {
       w.items.push({ id: uid(), kind: 'wod', wodId: it.wodId, def: JSON.parse(JSON.stringify(it.def)), res: {}, weight: it.weight, rx: it.rx, note: '', timer: null });
+    } else if (it.kind === 'task') {
+      w.items.push({ id: uid(), kind: 'task', text: it.text ?? '', mode: it.mode ?? 'none', time: null, sets: (it.sets ?? []).map(() => ({ done: false })), times: [] });
     }
   }
   save();
@@ -56,7 +66,7 @@ export function repeatWorkout(src) {
 const emptySet = s => !s.done && s.w == null && s.r == null && s.d == null && s.t == null;
 
 export function finishWorkout(w) {
-  for (const it of w.items) if (it.kind === 'ex') it.sets = it.sets.filter(s => !emptySet(s));
+  for (const it of w.items) if (it.kind === 'ex' || it.kind === 'task') it.sets = it.sets.filter(s => !emptySet(s));
   w.finished = true;
   if (state.activeId === w.id) state.activeId = null;
   save();

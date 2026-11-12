@@ -4,6 +4,7 @@ import { reset, go, tick, render } from './router.js';
 import { checkRest } from './rest.js';
 import { unlockAudio } from './signals.js';
 import { activeWorkout } from './queries.js';
+import { applyUi } from './ui.js';
 import './screens.js';
 import './item.js';
 import './history.js';
@@ -18,6 +19,7 @@ async function boot() {
     document.getElementById('app').textContent = 'Не удалось открыть данные: ' + e.message;
     return;
   }
+  applyUi(state.settings);
   reset('calendar');
   const a = activeWorkout();
   if (a) {

@@ -5,9 +5,10 @@ import { state, save, replaceState, exById, workoutById, APP_ID, VERSION } from 
 import { isoDate, fmtDate, fmtSet, fmtTime, parseTime, parseNum, fmtNum, daysBetween, fmtWodResult } from './calc.js';
 import { doneSets, prFlags, wodIsPR, activeWorkout } from './queries.js';
 import { pickerView, openPicker } from './picker.js';
-import { addEntry, startWorkout, lastWeek, repeatWorkout, finishWorkout, deleteWorkout, backdatedWorkout } from './workout.js';
+import { addEntry, addTask, startWorkout, lastWeek, repeatWorkout, finishWorkout, deleteWorkout, backdatedWorkout } from './workout.js';
 import { formatLine } from './data-wods.js';
 import { exportXlsx } from './export.js';
+import { applyUi } from './ui.js';
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
@@ -25,6 +26,19 @@ export function itemSummary(w, it) {
     const ds = doneSets(it);
     const pr = prFlags(w, it).some(Boolean);
     return { name: exById(it.exId)?.name ?? 'Удалённое упражнение', sum: ds.length ? ds.map(fmtSet).join(', ') : 'нет отмеченных подходов', pr };
+  }
+  if (it.kind === 'task') {
+    const name = (it.text ?? '').split('\n')[0].trim() || 'Задание';
+    let sum = '';
+    if (it.mode === 'time') sum = it.time != null ? fmtTime(it.time) : 'время не записано';
+    else if (it.mode === 'sets') {
+      const ds = (it.sets ?? []).filter(s => s.done);
+      sum = ds.length ? ds.map(fmtSet).join(', ') : 'подходы не отмечены';
+    } else if (it.mode === 'times') {
+      const ts = (it.times ?? []).filter(t => t != null);
+      sum = ts.length ? ts.map(fmtTime).join(', ') : 'интервалы не записаны';
+    }
+    return { name, sum, pr: false };
   }
   const r = fmtWodResult(it.def.format, it.res, it.rx);
   return { name: it.def.name, sum: r || formatLine(it.def), pr: wodIsPR(w, it) };
@@ -58,24 +72,25 @@ register('calendar', () => {
     : null;
 
   const dayW = (byDate[selected] ?? []).sort((a, b) => a.created - b.created);
+  const future = selected > today;
+  const newWorkoutBtn = future ? null : h('button', {
+    class: 'btn', onclick: () => go('workout', { id: (selected === today ? startWorkout() : backdatedWorkout(selected)).id }),
+  }, dayW.length ? '＋ Ещё одна тренировка' : selected === today ? '＋ Новая тренировка' : `＋ Тренировка за ${fmtDate(selected)}`);
   const day = h('div', null,
     h('div', { class: 'section' }, selected === today ? 'Сегодня' : fmtDate(selected)),
     dayW.length ? dayW.map(w => h('button', { class: 'card', onclick: () => go('workout', { id: w.id }) },
       h('div', { class: 't' }, w.id === state.activeId ? 'Идёт тренировка' : 'Тренировка', w.items.some(it => itemSummary(w, it).pr) ? h('span', { class: 'pr' }, ' 🏆') : null),
       w.items.length ? w.items.map(it => h('div', { class: 's' }, itemSummary(w, it).name)) : h('div', { class: 's' }, 'пустая')))
-      : selected < today ? h('button', { class: 'btn sec', onclick: () => go('workout', { id: backdatedWorkout(selected).id }) }, `Записать тренировку за ${fmtDate(selected)}`)
-      : h('div', { class: 'muted small' }, selected === today ? 'Сегодня тренировок ещё нет' : ''));
+      : h('div', { class: 'muted small', style: 'margin:2px 0 12px' }, future ? 'Этот день ещё не наступил' : 'В этот день тренировок нет'),
+    newWorkoutBtn,
+    selected === today && !activeWorkout() ? h('button', { class: 'btn sec', onclick: repeatSheet }, '↻ Повторить с прошлой недели') : null);
 
-  const a = activeWorkout();
   return {
     title: 'Тренировки', left: h('span'),
     body: [banner,
       h('div', { class: 'cal-head' }, h('button', { onclick: nav(-1), 'aria-label': 'Прошлый месяц' }, '‹'),
         h('h2', null, `${MONTHS[view.m]} ${view.y}`), h('button', { onclick: nav(1), 'aria-label': 'Следующий месяц' }, '›')),
       h('div', { class: 'cal' }, cells), day],
-    bottom: [
-      h('button', { class: 'btn', onclick: () => go('workout', { id: startWorkout().id }) }, a ? '▶ Продолжить тренировку' : '▶ Начать тренировку'),
-      a ? null : h('button', { class: 'btn sec', onclick: repeatSheet }, '↻ Повторить с прошлой недели')],
     tabs: tabs('calendar'),
   };
 });
@@ -110,19 +125,22 @@ register('workout', ({ id }) => {
       h('div', { class: 't' }, s.name, s.pr ? h('span', { class: 'pr' }, ' 🏆') : null), h('div', { class: 's' }, s.sum));
   });
   const add = () => openPicker(e => { const it = addEntry(w, e); go('item', { wid: w.id, iid: it.id }); });
+  const addText = () => { const it = addTask(w); go('item', { wid: w.id, iid: it.id }); };
   return {
     title: active ? 'Тренировка' : fmtDate(w.date),
     body: [
       h('div', { class: 'toggle', style: 'margin-bottom:12px;gap:12px' }, h('span', { class: 'muted' }, 'Дата'), date),
-      cards.length ? cards : h('div', { class: 'empty' }, 'Добавьте первое упражнение или комплекс'),
+      cards.length ? cards : h('div', { class: 'empty' }, 'Добавьте первое упражнение, комплекс или задание'),
       h('button', {
         class: 'btn danger', style: 'margin-top:20px', onclick: () => {
           if (confirm('Удалить тренировку целиком? Это нельзя отменить.')) { deleteWorkout(w); reset('calendar'); }
         },
       }, 'Удалить тренировку'),
     ],
-    bottom: h('div', { class: 'row2' },
-      h('button', { class: 'btn', onclick: add }, '+ Упражнение'),
+    bottom: h('div', null,
+      h('div', { class: 'row2' },
+        h('button', { class: 'btn', onclick: add }, '+ Упражнение'),
+        h('button', { class: 'btn', onclick: addText }, '+ Задание')),
       active ? h('button', { class: 'btn sec', onclick: () => { finishWorkout(w); selected = w.date; reset('calendar'); } }, 'Закончить')
         : h('button', { class: 'btn sec', onclick: () => back() }, 'Готово')),
   };
@@ -173,9 +191,25 @@ register('settings', () => {
     onchange: e => { const v = parseNum(e.target.value); if (v !== null) { s.bar = v; save(); } e.target.value = fmtNum(s.bar); },
   });
   const ALL = [50, 25, 20, 15, 10, 5, 2.5, 2, 1.5, 1.25, 1, 0.5];
+
+  // Оформление: выбор применяется сразу
+  const seg = (options, get, set) => h('div', { class: 'tabs2' }, Object.entries(options).map(([k, v]) =>
+    h('button', { class: get() === k ? 'on' : '', onclick: () => { set(k); save(); applyUi(s); render(true); } }, v)));
+  const ACCENTS = { blue: ['Синий', '#0A84FF'], green: ['Зелёный', '#30A24B'], orange: ['Оранжевый', '#E8760A'], pink: ['Розовый', '#E0335F'], purple: ['Фиолетовый', '#9E4EDD'], graphite: ['Графит', '#6E6E73'] };
   return {
     title: 'Настройки', left: h('span'),
     body: [
+      h('div', { class: 'section' }, 'Интерфейс'),
+      h('label', { class: 'f' }, 'Тема'),
+      seg({ auto: 'Как в телефоне', light: 'Светлая', dark: 'Тёмная' }, () => s.theme, v => { s.theme = v; }),
+      h('label', { class: 'f' }, 'Цвет'),
+      h('div', null, Object.entries(ACCENTS).map(([k, [name, color]]) =>
+        h('button', { class: 'chip' + (s.accent === k ? ' on' : ''), onclick: () => { s.accent = k; save(); applyUi(s); render(true); } },
+          h('span', { class: 'dot', style: `background:${color}` }), name))),
+      h('label', { class: 'f' }, 'Размер шрифта'),
+      seg({ s: 'Мелкий', m: 'Обычный', l: 'Крупный' }, () => s.font, v => { s.font = v; }),
+      h('label', { class: 'f' }, 'Плотность'),
+      seg({ normal: 'Обычная', compact: 'Компактная' }, () => s.density, v => { s.density = v; }),
       h('div', { class: 'section' }, 'Таймер отдыха'),
       h('div', { class: 'list' },
         h('label', null, 'Запускать после ✓', h('input', { type: 'checkbox', checked: s.restOn, style: 'width:24px;height:24px', onchange: e => { s.restOn = e.target.checked; save(); } })),

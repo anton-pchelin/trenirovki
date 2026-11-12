@@ -2,7 +2,7 @@
 import { h, sheet } from './dom.js';
 import { register, go, back, render } from './router.js';
 import { state, save, exById, workoutById } from './store.js';
-import { FIELDS, parseNum, parseTime, fmtNum, fmtTime, fmtSet, oneRM, percentTable, plates, wodHasResult, fmtWodResult } from './calc.js';
+import { FIELDS, parseNum, parseTime, fmtNum, fmtTime, fmtSet, oneRM, percentTable, plates, wodHasResult, fmtWodResult, weightForReps } from './calc.js';
 import { lastTime, prFlags, allDoneSets, wodIsPR, lastWod } from './queries.js';
 import { startRest, restBar } from './rest.js';
 import { beep, unlockAudio, keepAwake } from './signals.js';
@@ -12,7 +12,9 @@ import { formatLine } from './data-wods.js';
 register('item', ({ wid, iid }) => {
   const w = workoutById(wid), it = w?.items.find(i => i.id === iid);
   if (!it) { setTimeout(back); return { title: '', body: [] }; }
-  return it.kind === 'ex' ? exerciseScreen(w, it) : wodScreen(w, it);
+  if (it.kind === 'ex') return exerciseScreen(w, it);
+  if (it.kind === 'task') return taskScreen(w, it);
+  return wodScreen(w, it);
 });
 
 const fmtField = (f, v) => v == null ? '' : f === 't' ? fmtTime(v) : fmtNum(v);
@@ -81,6 +83,7 @@ function exerciseScreen(w, it) {
       hasW ? h('div', { class: 'row2', style: 'margin-top:8px' },
         h('button', { class: 'btn sec', onclick: () => percentSheet(it.exId) }, '% от 1ПМ'),
         h('button', { class: 'btn sec', onclick: () => platesSheet(it) }, 'Блины')) : null,
+      hasW ? h('button', { class: 'btn sec', style: 'margin-top:8px', onclick: () => suggestSheet(it.exId, it) }, '🎯 Подобрать вес под повторы') : null,
       h('label', { class: 'f' }, 'Заметка'),
       h('textarea', { value: it.note ?? '', oninput: e => { it.note = e.target.value; save(); } }),
       h('div', { class: 'muted small', style: 'margin-top:8px' }, 'Пустой подход с серыми цифрами: ✓ возьмёт прошлые значения. Нажмите на номер подхода, чтобы удалить его.'),
@@ -104,6 +107,31 @@ function fieldsSheet(it) {
       })))),
     h('div', { class: 'muted small', style: 'margin-top:8px' }, 'Например, подтягивания с отягощением — включите «Вес».'),
   ]);
+}
+
+// Подбор веса под целевое число повторов: обратная формула от 1ПМ (ручного или посчитанного)
+function suggestSheet(exId, it) {
+  let reps = 5;
+  sheet('Подобрать вес', (close, redraw) => {
+    const auto = oneRM(allDoneSets(exId));
+    const manual = state.oneRM[exId];
+    const base = manual ?? auto?.value ?? null;
+    const sug = base ? weightForReps(base, reps) : null;
+    return [
+      h('div', { class: 'toggle' }, h('span', { style: 'font-size:18px' }, 'Повторы в подходе'),
+        h('input', {
+          class: 'field', inputMode: 'numeric', style: 'width:110px;text-align:center;font-size:20px', value: reps,
+          onchange: e => { const v = parseNum(e.target.value); if (v && v >= 1 && v <= 30) reps = Math.round(v); redraw(); },
+        })),
+      base ? h('div', { class: 'muted small', style: 'margin:6px 0 12px' },
+        `От 1ПМ ${fmtNum(base)} кг (${manual != null ? 'задан вручную' : 'по формуле из ' + fmtSet(auto.from)})`)
+        : h('div', { class: 'muted', style: 'margin:6px 0 12px' }, 'Пока не от чего считать: отметьте подход с весом или задайте 1ПМ в «% от 1ПМ».'),
+      sug ? h('div', { class: 'clock', style: 'font-size:56px;margin:4px 0 10px' }, fmtNum(sug), h('span', { style: 'font-size:20px;color:var(--muted)' }, ' кг')) : null,
+      sug ? h('button', { class: 'btn', onclick: () => { it.sets.push({ w: sug, r: reps, done: false }); save(); close(); render(true); } },
+        `Вписать подход ${fmtNum(sug)}×${reps}`) : null,
+      sug ? h('div', { class: 'muted small center', style: 'margin-top:8px' }, 'Округлено до 2,5 кг') : null,
+    ];
+  });
 }
 
 function percentSheet(exId) {
@@ -267,4 +295,64 @@ function resultForm(d, it) {
     h('div', { style: 'display:grid;grid-template-columns:repeat(4,1fr);gap:6px' },
       Array.from({ length: d.rounds }, (_, i) => num(r.intervals[i], v => { r.intervals[i] = intVal(v); sum(); }, `${i + 1}`))),
     h('div', { style: 'margin-top:8px' }, 'Сумма повторов: ', total));
+}
+
+// ── Свободное задание текстом ──
+// {kind:'task', text, mode:'none'|'time'|'sets'|'times', time, sets:[{w,r,done}], times:[сек]}
+const TASK_MODES = { none: 'Только текст', time: 'Время', sets: 'Подходы', times: 'Интервалы' };
+
+function taskScreen(w, it) {
+  it.mode ??= 'none'; it.sets ??= []; it.times ??= [];
+  let editor = null;
+  if (it.mode === 'time') {
+    editor = h('div', { class: 'toggle', style: 'margin-top:10px' }, h('span', null, 'Время (мин:сек)'),
+      h('input', {
+        class: 'field', style: 'width:110px;text-align:center', inputMode: 'numeric', value: fmtTime(it.time), placeholder: '0:00',
+        oninput: e => { it.time = parseTime(e.target.value); save(); },
+        onchange: e => { e.target.value = fmtTime(it.time); },
+      }));
+  } else if (it.mode === 'sets') {
+    const rows = it.sets.map((s, i) => h('tr', { class: s.done ? 'done' : '' },
+      h('td', { class: 'n', onclick: () => { if (confirm(`Удалить подход ${i + 1}?`)) { it.sets.splice(i, 1); save(); render(true); } } }, i + 1),
+      h('td', null, h('input', { inputMode: 'decimal', value: fmtNum(s.w), placeholder: 'кг', 'aria-label': 'Кг', oninput: e => { s.w = parseNum(e.target.value); save(); } })),
+      h('td', null, h('input', { inputMode: 'numeric', value: s.r ?? '', placeholder: 'повт.', 'aria-label': 'Повт.', oninput: e => { const v = parseNum(e.target.value); s.r = v == null ? null : Math.round(v); save(); } })),
+      h('td', { style: 'width:50px' }, h('button', {
+        class: 'ok' + (s.done ? ' on' : ''), 'aria-label': 'Подход сделан',
+        onclick: () => { s.done = !s.done; save(); if (s.done) startRest(); render(true); },
+      }, '✓'))));
+    editor = h('div', null,
+      it.sets.length ? h('table', { class: 'sets' },
+        h('thead', null, h('tr', null, h('th', { class: 'n' }, '№'), h('th', null, 'Кг'), h('th', null, 'Повт.'), h('th'))),
+        h('tbody', null, rows)) : h('div', { class: 'empty' }, 'Подходов нет'),
+      h('button', { class: 'btn sec', style: 'margin-top:10px', onclick: () => { it.sets.push({ done: false }); save(); render(true); } }, '+ Подход'));
+  } else if (it.mode === 'times') {
+    editor = h('div', null,
+      it.times.map((t, i) => h('div', { class: 'toggle', style: 'margin-top:8px;gap:10px' },
+        h('span', { class: 'muted' }, `${i + 1}`),
+        h('input', {
+          class: 'field', style: 'flex:1;text-align:center', inputMode: 'numeric', value: fmtTime(t), placeholder: 'мин:сек',
+          oninput: e => { it.times[i] = parseTime(e.target.value); save(); },
+          onchange: e => { e.target.value = fmtTime(it.times[i]); },
+        }),
+        h('button', { class: 'link', onclick: () => { it.times.splice(i, 1); save(); render(true); } }, '✕'))),
+      h('button', { class: 'btn sec', style: 'margin-top:10px', onclick: () => { it.times.push(null); save(); render(true); } }, '+ Интервал'));
+  }
+  const rb = restBar(() => render(true));
+  return {
+    title: 'Задание',
+    body: [
+      w.id === state.activeId ? rb.el : null,
+      h('label', { class: 'f' }, 'Текст задания'),
+      h('textarea', {
+        value: it.text ?? '', style: 'min-height:110px', placeholder: 'Например: 3 раунда — 10 бёрпи, 15 махов гирей…',
+        oninput: e => { it.text = e.target.value; save(); },
+      }),
+      h('label', { class: 'f' }, 'Что записать'),
+      h('div', null, Object.entries(TASK_MODES).map(([k, v]) =>
+        h('button', { class: 'chip' + (it.mode === k ? ' on' : ''), onclick: () => { it.mode = k; save(); render(true); } }, v))),
+      editor,
+      h('button', { class: 'btn danger', style: 'margin-top:16px', onclick: () => removeItem(w, it) }, 'Убрать из тренировки'),
+    ],
+    tick: rb.update,
+  };
 }

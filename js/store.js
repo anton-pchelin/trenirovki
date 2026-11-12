@@ -9,6 +9,10 @@ export const VERSION = 1;
 
 export const DEFAULT_SETTINGS = {
   restOn: false, restSec: 120, bar: 20, plates: [25, 20, 15, 10, 5, 2.5, 1.25],
+  theme: 'auto',     // auto | light | dark
+  accent: 'blue',    // blue | green | orange | pink | purple | graphite
+  font: 'm',         // s | m | l
+  density: 'normal', // normal | compact
 };
 
 export function emptyState() {
