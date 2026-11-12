@@ -7,7 +7,7 @@ const ASSETS = [
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
   'js/app.js', 'js/calc.js', 'js/clock.js', 'js/data-exercises.js', 'js/data-wods.js', 'js/dom.js', 'js/export.js',
   'js/history.js', 'js/item.js', 'js/picker.js', 'js/queries.js', 'js/rest.js', 'js/router.js', 'js/screens.js',
-  'js/signals.js', 'js/store.js', 'js/ui.js', 'js/workout.js', 'js/xlsx.js',
+  'js/signals.js', 'js/store.js', 'js/sync.js', 'js/ui.js', 'js/workout.js', 'js/xlsx.js',
 ];
 
 self.addEventListener('install', e => {

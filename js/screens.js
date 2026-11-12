@@ -9,6 +9,7 @@ import { addEntry, addTask, startWorkout, lastWeek, repeatWorkout, finishWorkout
 import { formatLine } from './data-wods.js';
 import { exportXlsx } from './export.js';
 import { applyUi } from './ui.js';
+import { syncEnabled, enableSync, disableSync, syncNow, syncStatus } from './sync.js';
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
@@ -180,6 +181,47 @@ async function excel() {
   await shareFile(exportXlsx(), `тренировки_${isoDate()}.xlsx`);
 }
 
+// Блок синхронизации в настройках
+function syncBlock() {
+  if (!syncEnabled()) {
+    const inp = h('input', { class: 'field', placeholder: 'Вставьте токен GitHub', style: 'margin-bottom:8px' });
+    return h('div', null,
+      h('div', { class: 'muted small', style: 'margin-bottom:8px' },
+        'Чтобы тренировки были одинаковыми на телефоне и компьютере: один раз создайте токен на GitHub и вставьте его здесь на каждом устройстве. Данные лежат в вашем скрытом хранилище на GitHub, их видите только вы.'),
+      inp,
+      h('button', {
+        class: 'btn', onclick: async () => {
+          const t = inp.value.trim();
+          if (!t) { inp.classList.add('bad'); return; }
+          try {
+            await enableSync(t);
+            const changed = await syncNow();
+            if (changed) applyUi(state.settings);
+            alert('Синхронизация включена');
+            render(true);
+          } catch (e) { alert(e.message); }
+        },
+      }, 'Включить синхронизацию'));
+  }
+  const st = syncStatus();
+  return h('div', null,
+    h('div', { class: 'muted small', style: 'margin-bottom:8px' },
+      st ? (st.ok ? `Синхронизировано: ${new Date(st.at).toLocaleString('ru-RU')}` : `Ошибка: ${st.error}`) : 'Включена'),
+    h('div', { class: 'row2' },
+      h('button', {
+        class: 'btn', onclick: async () => {
+          const changed = await syncNow();
+          if (changed) { applyUi(state.settings); reset('calendar'); }
+          render(true);
+        },
+      }, 'Синхронизировать'),
+      h('button', {
+        class: 'btn sec', onclick: () => {
+          if (confirm('Отключить синхронизацию на этом устройстве? Записи останутся.')) { disableSync(); render(true); }
+        },
+      }, 'Отключить')));
+}
+
 register('settings', () => {
   const s = state.settings;
   const restIn = h('input', {
@@ -221,6 +263,8 @@ register('settings', () => {
         class: 'chip' + (s.plates.includes(p) ? ' on' : ''),
         onclick: () => { s.plates = s.plates.includes(p) ? s.plates.filter(x => x !== p) : [...s.plates, p].sort((a, b) => b - a); save(); render(true); },
       }, fmtNum(p)))),
+      h('div', { class: 'section' }, 'Синхронизация'),
+      syncBlock(),
       h('div', { class: 'section' }, 'Данные'),
       h('div', { class: 'muted small', style: 'margin-bottom:8px' },
         'Все записи хранятся только в этом телефоне. Если удалить значок или очистить данные Safari — они пропадут. Раз в неделю сохраняйте копию в «Файлы» или iCloud.'),

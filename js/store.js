@@ -56,7 +56,12 @@ export async function load() {
 }
 
 let saving = Promise.resolve();
+const saveListeners = [];
+// Подписаться на каждое сохранение (использует синхронизация)
+export function onSave(fn) { saveListeners.push(fn); }
+
 export function save() {
+  state.changedAt = Date.now();
   const snapshot = JSON.parse(JSON.stringify(state));
   saving = saving.then(async () => {
     const d = await db();
@@ -67,6 +72,7 @@ export function save() {
       t.onerror = () => rej(t.error);
     });
   }).catch(e => { console.error(e); alert('Не удалось сохранить данные: ' + e.message); });
+  for (const f of saveListeners) { try { f(); } catch (e) { console.error(e); } }
   return saving;
 }
 
