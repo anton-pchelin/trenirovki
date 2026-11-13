@@ -101,10 +101,12 @@ export function epley(w, r) {
   return r === 1 ? w : w * (1 + r / 30);
 }
 
-export function oneRM(sets) {
+// maxR — до скольки повторов доверяем формуле. Строгий 1ПМ — до 10;
+// для подсказок (подбор веса) можно до 30 — грубая, но полезная оценка по многоповторным подходам.
+export function oneRM(sets, maxR = 10) {
   let best = null, from = null;
   for (const s of sets) {
-    if (s.w == null || s.r == null || s.w <= 0 || s.r < 1 || s.r > 10) continue;
+    if (s.w == null || s.r == null || s.w <= 0 || s.r < 1 || s.r > maxR) continue;
     const v = epley(s.w, s.r);
     if (best === null || v > best) { best = v; from = s; }
   }

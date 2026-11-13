@@ -130,8 +130,11 @@ function fieldsSheet(it) {
 
 // Живой подбор: вводите повторы — считается вес; вводите вес — считаются повторы (от 1ПМ)
 function suggestSheet(exId, it) {
-  const auto = oneRM(allDoneSets(exId));
-  let base = state.oneRM[exId] ?? auto?.value ?? null;
+  const sets = allDoneSets(exId);
+  const auto = oneRM(sets);
+  const est = auto ? null : oneRM(sets, 30); // запасная оценка по многоповторным подходам (11–30)
+  let base = state.oneRM[exId] ?? auto?.value ?? est?.value ?? null;
+  const baseHow = state.oneRM[exId] != null ? 'задан вручную' : auto ? 'по формуле из ' + fmtSet(auto.from) : est ? 'оценка по лучшему подходу ' + fmtSet(est.from) : '';
   let reps = 5, wg = base ? weightForReps(base, reps) : null;
   sheet('Подбор веса и повторов', (close) => {
     const result = h('div', { class: 'clock', style: 'font-size:44px;margin:8px 0' });
@@ -173,7 +176,7 @@ function suggestSheet(exId, it) {
         h('div', { style: 'font-size:24px;color:var(--muted);padding-top:22px' }, '×'),
         h('div', null, h('label', { class: 'f', style: 'margin-top:0' }, 'Вес, кг'), wIn)),
       base ? h('div', { class: 'muted small', style: 'margin:8px 0' },
-        `От 1ПМ ${fmtNum(base)} кг (${state.oneRM[exId] != null ? 'задан вручную' : 'по формуле из ' + fmtSet(auto.from)})`)
+        `От 1ПМ ${fmtNum(base)} кг (${baseHow})`)
         : h('div', null,
           h('div', { class: 'muted', style: 'margin:8px 0 4px' }, 'Пока не от чего считать. Впишите свой 1ПМ (максимум на 1 повтор) — дальше всё посчитается само:'),
           h('div', { class: 'toggle' }, h('span', null, 'Ваш 1ПМ'), rmIn)),
@@ -185,10 +188,12 @@ function suggestSheet(exId, it) {
 }
 
 function percentSheet(exId) {
-  const auto = oneRM(allDoneSets(exId));
+  const sets = allDoneSets(exId);
+  const auto = oneRM(sets);
+  const est = auto ? null : oneRM(sets, 30);
   sheet('Проценты от 1ПМ', (close, redraw) => {
     const manual = state.oneRM[exId];
-    const base = manual ?? auto?.value ?? null;
+    const base = manual ?? auto?.value ?? est?.value ?? null;
     const input = h('input', {
       class: 'field', inputMode: 'decimal', style: 'width:110px;text-align:center;font-size:20px', value: fmtNum(base), placeholder: 'кг',
       onchange: e => {
@@ -200,8 +205,8 @@ function percentSheet(exId) {
     return [
       h('div', { class: 'toggle' }, h('span', { style: 'font-size:18px' }, '1ПМ, кг'), input),
       h('div', { class: 'muted small', style: 'margin:6px 0 12px' },
-        manual != null ? 'Задано вручную' : auto ? `По формуле из ${fmtSet(auto.from)}` : 'Истории ещё нет — впишите свой максимум'),
-      manual != null && auto ? h('button', { class: 'btn sec', onclick: () => { delete state.oneRM[exId]; save(); redraw(); } }, `Вернуть по формуле (${fmtNum(auto.value)})`) : null,
+        manual != null ? 'Задано вручную' : auto ? `По формуле из ${fmtSet(auto.from)}` : est ? `Оценка по лучшему подходу ${fmtSet(est.from)}` : 'Истории ещё нет — впишите свой максимум'),
+      manual != null && (auto || est) ? h('button', { class: 'btn sec', onclick: () => { delete state.oneRM[exId]; save(); redraw(); } }, `Вернуть по формуле (${fmtNum((auto ?? est).value)})`) : null,
       base ? h('div', { class: 'list', style: 'margin-top:12px' }, percentTable(base).map(r =>
         h('div', null, h('span', null, `${r.p}%`), h('b', null, `${fmtNum(r.w)} кг`)))) : null,
       base ? h('div', { class: 'muted small center', style: 'margin-top:6px' }, 'Округлено до 2,5 кг') : null,
