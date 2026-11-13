@@ -10,6 +10,7 @@ export const HEADER = ['Дата', 'Упражнение', 'Тип', '№', 'В�
 export function exportRows() {
   const rows = [];
   for (const w of sortedWorkouts()) {
+    if (w.planned) continue; // планы на будущее в отчёт не идут
     for (const it of w.items) {
       if (it.kind === 'ex') {
         const ex = exById(it.exId);

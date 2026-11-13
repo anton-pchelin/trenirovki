@@ -2,7 +2,7 @@
 import { h } from './dom.js';
 import { register, render } from './router.js';
 import { exById, wodById } from './store.js';
-import { fmtSet, fmtDate, fmtNum, fmtTime, bestSets, repMaxes, oneRM, fmtWodResult } from './calc.js';
+import { fmtSet, fmtDate, fmtNum, fmtTime, bestSets, oneRM, fmtWodResult } from './calc.js';
 import { entries, doneSets, prFlags, wodEntries, wodBest, wodIsPR } from './queries.js';
 import { formatLine } from './data-wods.js';
 
@@ -56,11 +56,24 @@ function exHistory(id, switcher) {
     body = [h('div', { class: 'muted small' }, label + (lowerBetter ? ' (ниже — лучше)' : '')), chart(pts, fmt)];
   } else {
     const rm = oneRM(all);
+    // Повторные максимумы: N-ПМ — лучший и последний вес на N и более повторов (как «Рекорды» у TRNR)
+    const ns = [1, 3, 5, 10];
+    const rows = ns.map(n => {
+      const qual = [];
+      for (const e of list) for (const s of doneSets(e.item))
+        if (s.w != null && s.r != null && s.r >= n) qual.push({ s, date: e.workout.date });
+      if (!qual.length) return null;
+      const best = qual.reduce((a, b) => (b.s.w > a.s.w || (b.s.w === a.s.w && b.s.r > a.s.r) ? b : a));
+      const last = qual[qual.length - 1];
+      return { n, best, last };
+    }).filter(Boolean);
     body = [
-      h('div', { class: 'list' }, repMaxes(all).map(({ n, set }) => h('div', null,
-        h('span', null, `${n} ${n === 1 ? 'повтор' : n < 5 ? 'повтора' : 'повторов'}`),
-        set ? h('span', null, h('b', null, `${fmtNum(set.w)} кг`), h('span', { class: 'muted small' }, `  ${fmtDate(dateOf(set, list))}`)) : h('span', { class: 'muted' }, '—')))),
-      h('div', { class: 'muted small', style: 'margin-top:6px' }, 'Лучший вес, поднятый на столько или больше повторов.'),
+      rows.length ? h('div', { class: 'list' }, rows.map(({ n, best, last }) => h('div', { style: 'display:block' },
+        h('div', { style: 'font-weight:600' }, `${n}-ПМ`),
+        h('div', { class: 'muted small', style: 'margin-top:2px' }, 'Лучший: ', h('b', { style: 'color:var(--text)' }, `${fmtNum(best.s.w)} кг × ${best.s.r}`), `  ${fmtDate(best.date)}`),
+        last !== best ? h('div', { class: 'muted small' }, 'Последний: ', h('b', { style: 'color:var(--text)' }, `${fmtNum(last.s.w)} кг × ${last.s.r}`), `  ${fmtDate(last.date)}`) : null)))
+        : h('div', { class: 'empty' }, 'Пока нет подходов с весом и повторами'),
+      h('div', { class: 'muted small', style: 'margin-top:6px' }, 'N-ПМ — лучший вес, поднятый на N или больше повторов.'),
       rm ? h('div', { class: 'card', style: 'margin-top:14px' }, h('div', { class: 's' }, '1ПМ по формуле'), h('div', { class: 't' }, `${fmtNum(rm.value)} кг`), h('div', { class: 's' }, `из ${fmtSet(rm.from)}`)) : null,
     ];
   }

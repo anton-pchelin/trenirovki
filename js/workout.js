@@ -46,21 +46,114 @@ export function lastWeek() {
     .sort((a, b) => b.date.localeCompare(a.date) || b.created - a.created);
 }
 
+// Копия пунктов без результатов: для «повторить», шаблонов и планов. Суперсеты сохраняются (новые id групп).
+export function planItems(items) {
+  const out = [], ssMap = {};
+  for (const it of items) {
+    const ss = it.ss ? (ssMap[it.ss] ??= uid()) : null;
+    let n = null;
+    if (it.kind === 'ex' && exById(it.exId)) {
+      const cnt = Math.max(1, it.sets.filter(s => s.done).length);
+      n = { id: uid(), kind: 'ex', exId: it.exId, fields: [...it.fields], sets: Array.from({ length: cnt }, () => ({ done: false })), note: '' };
+    } else if (it.kind === 'wod') {
+      n = { id: uid(), kind: 'wod', wodId: it.wodId, def: JSON.parse(JSON.stringify(it.def)), res: {}, weight: it.weight, rx: it.rx, note: '', timer: null };
+    } else if (it.kind === 'task') {
+      n = { id: uid(), kind: 'task', text: it.text ?? '', mode: it.mode ?? 'none', time: null, sets: (it.sets ?? []).map(() => ({ done: false })), times: [] };
+    }
+    if (n) { if (ss) n.ss = ss; out.push(n); }
+  }
+  return out;
+}
+
 // Новая тренировка с теми же упражнениями; веса — только подсказкой «прошлый раз»
 export function repeatWorkout(src) {
   const w = startWorkout();
-  for (const it of src.items) {
-    if (it.kind === 'ex' && exById(it.exId)) {
-      const n = Math.max(1, it.sets.filter(s => s.done).length);
-      w.items.push({ id: uid(), kind: 'ex', exId: it.exId, fields: [...it.fields], sets: Array.from({ length: n }, () => ({ done: false })), note: '' });
-    } else if (it.kind === 'wod') {
-      w.items.push({ id: uid(), kind: 'wod', wodId: it.wodId, def: JSON.parse(JSON.stringify(it.def)), res: {}, weight: it.weight, rx: it.rx, note: '', timer: null });
-    } else if (it.kind === 'task') {
-      w.items.push({ id: uid(), kind: 'task', text: it.text ?? '', mode: it.mode ?? 'none', time: null, sets: (it.sets ?? []).map(() => ({ done: false })), times: [] });
-    }
+  w.items = planItems(src.items);
+  save();
+  return w;
+}
+
+// ── Планирование ──
+
+// Тренировка на конкретную дату (в т.ч. будущую). Будущая — «план»: не активна и не закончена.
+export function plannedWorkout(date) {
+  const w = newWorkout(date);
+  w.planned = true;
+  save();
+  return w;
+}
+
+// Начать запланированную: сегодня — как обычную, задним числом — как запись факта
+export function startPlanned(w) {
+  delete w.planned;
+  const today = isoDate();
+  if (w.date === today) {
+    const cur = state.activeId && workoutById(state.activeId);
+    if (cur && cur.id !== w.id) return cur; // уже идёт другая
+    w.finished = false;
+    state.activeId = w.id;
+  } else {
+    w.finished = true;
   }
   save();
   return w;
+}
+
+// Отметка «день отдыха» на дату
+export function toggleRestDay(date) {
+  state.restDays ??= [];
+  if (state.restDays.includes(date)) state.restDays = state.restDays.filter(d => d !== date);
+  else state.restDays.push(date);
+  save();
+}
+
+// ── Шаблоны тренировок ──
+
+export function saveAsTemplate(w, name) {
+  state.templates ??= [];
+  const t = { id: uid(), name: name.trim(), items: planItems(w.items) };
+  state.templates.push(t);
+  save();
+  return t;
+}
+
+export function deleteTemplate(id) {
+  state.templates = (state.templates ?? []).filter(t => t.id !== id);
+  save();
+}
+
+// Развернуть шаблон в день: будущий день — план, сегодня — обычная (или активная), прошлый — задним числом
+export function applyTemplate(t, date) {
+  const today = isoDate();
+  const w = date > today ? plannedWorkout(date) : date === today ? startWorkout() : backdatedWorkout(date);
+  w.items = planItems(t.items);
+  save();
+  return w;
+}
+
+// ── Суперсеты ──
+// it.ss — id группы; идущие подряд пункты с одним ss — один суперсет (A, B, C…)
+
+// Объединить пункт с предыдущим в суперсет
+export function joinSuperset(w, it) {
+  const i = w.items.findIndex(x => x.id === it.id);
+  if (i < 1) return;
+  const prev = w.items[i - 1];
+  if (prev.ss && prev.ss === it.ss) return;
+  const id = it.ss ?? prev.ss ?? uid();
+  prev.ss = id;
+  it.ss = id;
+  save();
+}
+
+// Убрать пункт из суперсета; если в группе остался один — снимаем группу совсем
+export function leaveSuperset(w, it) {
+  const id = it.ss;
+  if (!id) return;
+  it.ss = null; delete it.ss;
+  const rest = w.items.filter(x => x.ss === id);
+  if (rest.length === 1) { rest[0].ss = null; delete rest[0].ss; }
+  save();
 }
 
 const emptySet = s => !s.done && s.w == null && s.r == null && s.d == null && s.t == null;
@@ -68,6 +161,7 @@ const emptySet = s => !s.done && s.w == null && s.r == null && s.d == null && s.
 export function finishWorkout(w) {
   for (const it of w.items) if (it.kind === 'ex' || it.kind === 'task') it.sets = it.sets.filter(s => !emptySet(s));
   w.finished = true;
+  delete w.planned;
   if (state.activeId === w.id) state.activeId = null;
   save();
 }

@@ -117,7 +117,21 @@ main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 6p
 .cal .d.sel { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .cal .d.sel::after { background: var(--on-accent) !important; }
 .cal .d.has::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); position: absolute; bottom: 6px; }
+.cal .d.plan::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: transparent; border: 1.6px solid var(--accent); position: absolute; bottom: 6px; box-sizing: border-box; }
+.cal .d.rest { color: var(--muted); }
+.cal .d.rest::before { content: '😴'; position: absolute; top: 2px; font-size: 0.55rem; }
 .cal .d.future { color: var(--muted); }
+.cal .d.sel.rest, .cal .d.sel.future { color: var(--on-accent); }
+
+/* Тренировка-план в списке дня — приглушённая карточка */
+.card.plan { border-style: dashed; box-shadow: none; opacity: .92; }
+
+/* Суперсет: общая рамка, буквы А/Б/В */
+.ss { border: 1.5px solid var(--accent); border-radius: 16px; padding: 8px 8px 0; margin-bottom: 10px; position: relative; }
+.ss .card { margin-bottom: 8px; box-shadow: none; }
+.sst { font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; padding: 0 4px 6px; }
+.ssl { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; border-radius: 8px;
+  background: var(--accent); color: var(--on-accent); font-size: 0.85rem; font-weight: 700; margin-right: 8px; }
 .banner { background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 12px;
   padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 12px 0; font-size: 0.9rem; }
 

@@ -8,6 +8,17 @@ import { startRest, restBar } from './rest.js';
 import { beep, unlockAudio, keepAwake } from './signals.js';
 import { wodClock, COUNTDOWN } from './clock.js';
 import { formatLine } from './data-wods.js';
+import { joinSuperset, leaveSuperset } from './workout.js';
+
+// Строка управления суперсетом: объединить с предыдущим пунктом или выйти из группы
+function ssRow(w, it) {
+  if (it.ss) return h('div', { style: 'margin:-2px 0 10px' },
+    h('button', { class: 'link', onclick: () => { leaveSuperset(w, it); render(true); } }, '⛓ Убрать из суперсета'));
+  const i = w.items.findIndex(x => x.id === it.id);
+  if (i < 1) return null;
+  return h('div', { style: 'margin:-2px 0 10px' },
+    h('button', { class: 'link', onclick: () => { joinSuperset(w, it); render(true); } }, '🔗 Объединить с предыдущим в суперсет'));
+}
 
 register('item', ({ wid, iid }) => {
   const w = workoutById(wid), it = w?.items.find(i => i.id === iid);
@@ -22,7 +33,12 @@ const parseField = (f, s) => f === 't' ? parseTime(s) : f === 'r' || f === 'd' ?
 
 function removeItem(w, it) {
   if (!confirm('Убрать из тренировки?')) return;
+  const ss = it.ss;
   w.items = w.items.filter(x => x.id !== it.id);
+  if (ss) { // в суперсете не должно остаться одного пункта
+    const rest = w.items.filter(x => x.ss === ss);
+    if (rest.length === 1) { rest[0].ss = null; delete rest[0].ss; }
+  }
   save(); back();
 }
 
@@ -74,6 +90,7 @@ function exerciseScreen(w, it) {
       w.id === state.activeId ? rb.el : null,
       h('label', { class: 'toggle', style: 'margin-bottom:10px' }, h('span', null, 'Выполнено'),
         h('input', { type: 'checkbox', checked: !!it.done, style: 'width:24px;height:24px', onchange: e => { it.done = e.target.checked; save(); } })),
+      ssRow(w, it),
       h('div', { class: 'prev' }, prev.length ? 'Прошлый раз: ' + prev.map(fmtSet).join(', ') : 'Первый раз — удачи!'),
       h('table', { class: 'sets' },
         h('thead', null, h('tr', null, h('th', { class: 'n' }, '№'), it.fields.map(f => h('th', null, FIELDS[f].label)), h('th'))),
@@ -234,6 +251,7 @@ function wodScreen(w, it) {
   const body = [
     h('label', { class: 'toggle', style: 'margin-bottom:10px' }, h('span', null, 'Выполнено'),
       h('input', { type: 'checkbox', checked: !!it.done, style: 'width:24px;height:24px', onchange: e => { it.done = e.target.checked; save(); } })),
+    ssRow(w, it),
     h('div', { class: 'muted' }, formatLine(d)),
     h('div', { class: 'wodlines' }, d.lines.map(l => h('div', null, l))),
     prev ? h('div', { class: 'prev' }, `Прошлый раз (${prev.workout.date.split('-').reverse().join('.')}): ${fmtWodResult(d.format, prev.item.res, prev.item.rx)}`) : null,
@@ -379,6 +397,7 @@ function taskScreen(w, it) {
       w.id === state.activeId ? rb.el : null,
       h('label', { class: 'toggle', style: 'margin-bottom:10px' }, h('span', null, 'Выполнено'),
         h('input', { type: 'checkbox', checked: !!it.done, style: 'width:24px;height:24px', onchange: e => { it.done = e.target.checked; save(); } })),
+      ssRow(w, it),
       h('label', { class: 'f' }, 'Текст задания'),
       h('textarea', {
         value: it.text ?? '', style: 'min-height:110px', placeholder: 'Например: 3 раунда — 10 бёрпи, 15 махов гирей…',

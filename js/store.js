@@ -22,6 +22,8 @@ export function emptyState() {
     customExercises: [],   // {id, name, cat, type}
     customWods: [],        // как в data-wods.js
     favorites: [], recent: [],
+    templates: [],           // {id, name, items:[без результатов]} — шаблоны тренировок
+    restDays: [],            // даты "2026-11-20", отмеченные как день отдыха
     settings: { ...DEFAULT_SETTINGS },
     oneRM: {},             // exId → ручной 1ПМ
     lastBackup: null,
